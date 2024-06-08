@@ -1,0 +1,84 @@
+jenkins:
+  numExecutors: 8
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        # usuario administrador que puede hacer cualquier cosa
+        - id: ${JENKINS_NOMBRE_ADMINISTRADOR:-administrador}
+          name: ${JENKINS_NOMBRE_ADMINISTRADOR:-administrador}
+          password: ${JENKINS_PASSWORD_ADMINISTRADOR:-AdministradorTFG2024}
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:${JENKINS_NOMBRE_ADMINISTRADOR:-administrador}"
+        - 'Overall/Read:authenticated'
+  # configuracion para la creacion de Agentes contenedorizados
+  clouds:
+    - docker:
+        name: "Daemon-Docker"
+        dockerApi:
+          dockerHost:
+            uri: "unix:///var/run/docker.sock"
+        templates:
+          # imagen de un Agente con Powershell Core, PSDepend, Pester y PSScriptAnalyzer instalados
+          - labelString: "agente-pwsh-jnlp"
+            remoteFs: "/var/jenkins_home"
+            mode: EXCLUSIVE
+            retentionStrategy:
+              idleMinutes: 1
+              numberOfTasksInProgress: 1
+              terminateOnceDone: true
+            instanceCapStr: "4"
+            pullTimeout: 120
+            dockerTemplateBase:
+              image: "tfg2asircanaveral2024/jenkins:agente-pwsh-jnlp"
+              mounts: 
+                - "type=bind,source=/var/jenkins_home/workspace-compartido,target=/var/jenkins_home/workspace-compartido"
+                - "type=volume,source=modulos-instalados,target=/usr/local/share/powershell/Modules"
+              network: "10-proyecto-powershell_red-1"
+              tty: false
+              user: "0"
+            connector:
+              jnlp:
+                user: "root"
+                
+unclassified:
+  location:
+    url: http://servidor-jenkins:8080
+
+jobs:
+  # pipeline que se ejecuta correctamente
+  - script: >
+      pipelineJob('10-pipeline-proyecto-powershell-correcto') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  github('tfg2asircanaveral2024/10-proyecto-powershell')
+                }
+                branches('*/correcto')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  # pipeline que se ejecuta con errores
+  - script: >
+      pipelineJob('10-pipeline-proyecto-powershell-incorrecto') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  github('tfg2asircanaveral2024/10-proyecto-powershell')
+                }
+                branches('*/incorrecto')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
